@@ -1,0 +1,16 @@
+{% extends "base.njk" %}
+{% set schema = "article" %}
+
+{% block content %}
+<article>
+  <a class="home-link" href="/corpus/">← the corpus</a>
+  <h1>{{ title }}</h1>
+  <p class="meta"><time datetime="{{ date | isoDate }}">{{ date | readableDate }}</time></p>
+
+  {{ content | safe }}
+</article>
+
+<p class="subscribe">
+  <a href="/begin">Subscribe to the Weekly Transmission →</a>
+</p>
+{% endblock %}

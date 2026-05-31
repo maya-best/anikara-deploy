@@ -1,0 +1,15 @@
+{
+  "name": "anikara-systems",
+  "version": "1.0.0",
+  "description": "anikara.systems — static site + Eleventy corpus blog",
+  "private": true,
+  "scripts": {
+    "dev": "eleventy --serve",
+    "build": "eleventy",
+    "clean": "rm -rf _site"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@11ty/eleventy": "^3.1.5"
+  }
+}

@@ -1,0 +1,27 @@
+---
+permalink: /corpus/
+title: The Corpus
+description: Field notes on attention, nervous-system awareness, and the quiet practice of change.
+---
+{% extends "base.njk" %}
+
+{% block content %}
+<header>
+  <h1>The Corpus</h1>
+  <p class="meta">Field notes, written slowly.</p>
+</header>
+
+<hr>
+
+<ul class="corpus-list">
+  {% for post in collections.corpus %}
+  <li>
+    <a class="entry-title" href="{{ post.url }}">
+      <h2>{{ post.data.title }}</h2>
+    </a>
+    <p class="meta"><time datetime="{{ post.date | isoDate }}">{{ post.date | readableDate }}</time></p>
+    <p class="excerpt">{{ post | excerpt }}</p>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

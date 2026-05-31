@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Anikara">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Anikara</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root {
+    width: 100%; height: 100%;
+    background: #000;
+    overflow: hidden;
+  }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#000000">
+  <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <rect width="400" height="400" fill="#000"/>
+    <radialGradient id="g1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(60,80,200,0.7)"/>
+      <stop offset="50%" stop-color="rgba(60,80,200,0.2)"/>
+      <stop offset="100%" stop-color="rgba(60,80,200,0)"/>
+    </radialGradient>
+    <circle cx="200" cy="200" r="140" fill="url(#g1)"/>
+    <radialGradient id="g2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(80,100,220,0.55)"/>
+      <stop offset="100%" stop-color="rgba(80,100,220,0)"/>
+    </radialGradient>
+    <circle cx="200" cy="200" r="72" fill="url(#g2)"/>
+  </svg>
+</template>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useLayoutEffect } = React;
+
+// ─── TIMING ───────────────────────────────────────────────────────
+const INH  = 5;    // inhale seconds
+const EXH  = 5;    // exhale seconds
+const GAP  = 4;    // gap between cycles
+const CYC  = INH + EXH + GAP; // 14s per cycle
+const ENTRANCE = 8; // seconds of breath-only before first word
+
+// ─── SCRIPT ───────────────────────────────────────────────────────
+const SCRIPT = [
+  // Somatic
+  { text: 'jaw releases',        phase: 0 },
+  { text: 'eyes soften',         phase: 0 },
+  { text: 'shoulders drop',      phase: 0 },
+  { text: 'chest opens',         phase: 0 },
+  { text: 'belly relaxes',       phase: 0 },
+  { text: 'hips settle',         phase: 0 },
+  { text: '',                    phase: 0 },
+  // Stabilization
+  { text: 'nothing is missing',  phase: 1 },
+  { text: 'this is enough',      phase: 1 },
+  { text: 'you can stay here',   phase: 1 },
+  { text: 'there is nothing to fix', phase: 1 },
+  { text: '',                    phase: 1 },
+  // Authority
+  { text: 'this holds',          phase: 2 },
+  { text: 'you decide from here',phase: 2 },
+  { text: 'it follows from this',phase: 2 },
+  { text: '',                    phase: 2 },
+  // Identity — fully silent, body knows
+  { text: '',                    phase: 3 },
+  { text: '',                    phase: 3 },
+  { text: '',                    phase: 3 },
+  // Closure
+  { text: 'you hold this',        phase: 4 },
+  { text: 'carry this',          phase: 4 },
+  { text: 'this remains',        phase: 4 },
+  { text: '',                    phase: 4 },
+  { text: '',                    phase: 4 },
+];
+
+// Orb colors per phase (visible, soft indigo-blue)
+const PHASE_COLOR = [
+  [60,  80, 200],  // somatic    — cool blue
+  [70,  90, 205],  // stabilize  — slightly warmer
+  [90,  95, 210],  // authority  — shifting
+  [105, 95, 205],  // identity   — violet edge
+  [65,  78, 185],  // closure    — return
+];
+
+const ORB_BASE  = 560; // px — fixed large canvas, scaled down
+const ORB_MIN   = 0.22; // minimum scale (gap / rest)
+const ORB_MAX   = 1.0;  // maximum scale (peak inhale)
+
+const TOTAL_CYCLES  = SCRIPT.length;
+const SESSION_END   = ENTRANCE + TOTAL_CYCLES * CYC + 8; // +8s end hold
+
+function easeInOut(t) {
+  t = Math.max(0,Math.min(1,t));
+  return t<0.5 ? 2*t*t : -1+(4-2*t)*t;
+}
+function easeOut(t) { return 1-(1-Math.max(0,Math.min(1,t)))**3; }
+function easeIn(t)  { return Math.max(0,Math.min(1,t))**3; }
+
+// ─── Main component ───────────────────────────────────────────────
+function Anikara() {
+  const [started, setStarted]   = useState(false);
+  const [finished, setFinished] = useState(false);
+  const canvasRef   = useRef(null);
+  const textRef     = useRef(null);
+  const rafRef      = useRef(null);
+  const startRef    = useRef(null);
+  const offsetRef   = useRef(0);
+  const stateRef    = useRef({ text: '', textOp: 0, textY: 0 });
+  const audioRef    = useRef(null); // { ctx, osc, gain, filterGain }
+
+  // Phase base frequencies (Hz) — subtle shifts across the arc
+  const PHASE_FREQ = [174, 180, 187, 194, 174];
+
+  function initAudio() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+      // iOS requires a buffer source played inside the tap gesture to unlock
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.resume();
+
+      // Master gain — starts audible immediately
+      const master = ctx.createGain();
+      master.gain.value = 0.10; // set directly, not via scheduling
+      master.connect(ctx.destination);
+
+      // Primary tone
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(PHASE_FREQ[0], ctx.currentTime);
+      gain.gain.setValueAtTime(1.0, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start();
+
+      // Second harmonic — half volume
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(PHASE_FREQ[0] * 2, ctx.currentTime);
+      gain2.gain.setValueAtTime(0.25, ctx.currentTime);
+      osc2.connect(gain2);
+      gain2.connect(master);
+      osc2.start();
+
+      audioRef.current = { ctx, osc, osc2, gain, gain2, master };
+    } catch(e) {
+      console.warn('Audio init failed:', e);
+    }
+  }
+
+  useEffect(() => {
+    const s = localStorage.getItem('anikara_t');
+    if (s) {
+      const v = parseFloat(s);
+      if (v < SESSION_END - 5) offsetRef.current = v;
+      else localStorage.removeItem('anikara_t');
+    }
+  }, []);
+
+  // ─── RAF loop: drives canvas orb + text DOM directly ─────────
+  function loop(now) {
+    const elapsed = (now - startRef.current) / 1000 + offsetRef.current;
+    localStorage.setItem('anikara_t', elapsed);
+
+    if (elapsed >= SESSION_END) {
+      if (canvasRef.current) canvasRef.current.style.opacity = '0';
+      if (textRef.current)   textRef.current.style.opacity   = '0';
+      // Fade audio out
+      const a = audioRef.current;
+      if (a) {
+        a.master.gain.setTargetAtTime(0, a.ctx.currentTime, 1.5);
+      }
+      setTimeout(() => setFinished(true), 3000);
+      return;
+    }
+
+    // ── Compute breath scale ────────────────────────────────────
+    const cyclePos = elapsed % CYC;
+    let breathScale;
+    if (cyclePos < INH) {
+      breathScale = ORB_MIN + (ORB_MAX - ORB_MIN) * easeInOut(cyclePos / INH);
+    } else if (cyclePos < INH + EXH) {
+      breathScale = ORB_MAX - (ORB_MAX - ORB_MIN) * easeInOut((cyclePos - INH) / EXH);
+    } else {
+      breathScale = ORB_MIN;
+    }
+
+    // ── Compute phase ───────────────────────────────────────────
+    let phaseIdx = 0;
+    let globalOpacity = 1;
+    let color = PHASE_COLOR[0];
+
+    if (elapsed < ENTRANCE) {
+      globalOpacity = easeInOut(elapsed / ENTRANCE);
+    } else {
+      const sessionT = elapsed - ENTRANCE;
+      const cycleIdx = Math.floor(sessionT / CYC);
+      if (cycleIdx < SCRIPT.length) {
+        phaseIdx = SCRIPT[cycleIdx].phase;
+        color = PHASE_COLOR[phaseIdx];
+      } else {
+        phaseIdx = 4;
+        color = PHASE_COLOR[4];
+        const endT = sessionT - SCRIPT.length * CYC;
+        globalOpacity = 1 - easeIn(endT / 6);
+      }
+    }
+
+    // ── Draw orb on canvas ──────────────────────────────────────
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const cx = W / 2, cy = H / 2;
+      const r = (ORB_BASE / 2) * breathScale;
+
+      // Outer halo
+      const g1 = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.5);
+      g1.addColorStop(0,   `rgba(${color[0]},${color[1]},${color[2]}, 0.10)`);
+      g1.addColorStop(0.4, `rgba(${color[0]},${color[1]},${color[2]}, 0.04)`);
+      g1.addColorStop(1,   `rgba(${color[0]},${color[1]},${color[2]}, 0)`);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = g1;
+      ctx.fill();
+
+      // Mid glow
+      const g2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.4);
+      g2.addColorStop(0,   `rgba(${color[0]},${color[1]},${color[2]}, 0.28)`);
+      g2.addColorStop(0.5, `rgba(${color[0]},${color[1]},${color[2]}, 0.10)`);
+      g2.addColorStop(1,   `rgba(${color[0]},${color[1]},${color[2]}, 0)`);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = g2;
+      ctx.fill();
+
+      // Core
+      const g3 = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.65);
+      g3.addColorStop(0,   `rgba(${color[0]},${color[1]},${color[2]}, 0.55)`);
+      g3.addColorStop(0.6, `rgba(${color[0]},${color[1]},${color[2]}, 0.18)`);
+      g3.addColorStop(1,   `rgba(${color[0]},${color[1]},${color[2]}, 0)`);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.65, 0, Math.PI * 2);
+      ctx.fillStyle = g3;
+      ctx.fill();
+
+      canvas.style.opacity = globalOpacity;
+    }
+
+    // ── Audio: drone breathes with orb ──────────────────────────
+    const a = audioRef.current;
+    if (a && a.ctx.state === 'running') {
+      const t = a.ctx.currentTime;
+      const targetVol = (0.04 + 0.09 * breathScale) * globalOpacity;
+      // Use exponential ramp — more reliable on iOS than linear
+      a.master.gain.setTargetAtTime(targetVol, t, 0.5);
+      const targetFreq = PHASE_FREQ[phaseIdx] || PHASE_FREQ[0];
+      a.osc.frequency.setTargetAtTime(targetFreq, t, 2);
+      a.osc2.frequency.setTargetAtTime(targetFreq * 2, t, 2);
+    } else if (a && a.ctx.state === 'suspended') {
+      a.ctx.resume();
+    }
+
+    // ── Text state ──────────────────────────────────────────────
+    let text = '', textOp = 0, textY = 0;
+
+    if (elapsed >= ENTRANCE) {
+      const sessionT  = elapsed - ENTRANCE;
+      const cycleIdx  = Math.floor(sessionT / CYC);
+      const withinCyc = sessionT - cycleIdx * CYC;
+
+      if (cycleIdx < SCRIPT.length) {
+        const entry = SCRIPT[cycleIdx];
+        if (entry.text) {
+          text = entry.text;
+          // Appears on exhale, holds, drifts out on gap
+          if (withinCyc < INH) {
+            textOp = 0;
+          } else if (withinCyc < INH + 2) {
+            textOp = easeOut((withinCyc - INH) / 2);
+            textY  = 6 * (1 - easeOut((withinCyc - INH) / 2));
+          } else if (withinCyc < INH + EXH) {
+            textOp = 1; textY = 0;
+          } else {
+            const t = (withinCyc - INH - EXH) / GAP;
+            textOp = 1 - easeIn(t);
+            textY  = -14 * easeIn(t);
+          }
+        }
+      }
+    }
+
+    // Update text DOM directly (avoid React re-render cost)
+    const el = textRef.current;
+    if (el) {
+      const prev = stateRef.current;
+      if (prev.text !== text) {
+        el.textContent = text;
+        prev.text = text;
+      }
+      if (Math.abs(prev.textOp - textOp) > 0.002) {
+        el.style.opacity   = textOp;
+        el.style.transform = `translateY(${textY}px)`;
+        prev.textOp = textOp;
+        prev.textY  = textY;
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(loop);
+  }
+
+  const begin = () => {
+    startRef.current = performance.now();
+    initAudio();
+    setStarted(true);
+    rafRef.current = requestAnimationFrame(loop);
+  };
+
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  // ── Canvas sizing ──────────────────────────────────────────────
+  useLayoutEffect(() => {
+    if (!canvasRef.current) return;
+    const resize = () => {
+      const c = canvasRef.current;
+      if (!c) return;
+      c.width  = window.innerWidth;
+      c.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [started]);
+
+  // ── Finished ───────────────────────────────────────────────────
+  if (finished) {
+    localStorage.removeItem('anikara_t');
+    return <div style={{ width:'100vw', height:'100vh', background:'#000' }} />;
+  }
+
+  // ── Pre-start ──────────────────────────────────────────────────
+  if (!started) {
+    return (
+      <div
+        style={{ width:'100vw', height:'100vh', background:'#000', cursor:'pointer', position:'relative' }}
+        onClick={begin}
+      >
+        <style>{`
+          @keyframes orb { 0%,100%{opacity:.42;transform:scale(.9)} 50%{opacity:.72;transform:scale(1.12)} }
+          @keyframes word { 0%,100%{opacity:.55} 50%{opacity:.82} }
+        `}</style>
+        <div style={{
+          position:'absolute', inset:0,
+          display:'flex', alignItems:'center', justifyContent:'center',
+        }}>
+          <div style={{
+            width:'340px', height:'340px', borderRadius:'50%',
+            background:'radial-gradient(ellipse, rgba(60,80,200,.45) 0%, rgba(60,80,200,.12) 45%, transparent 70%)',
+            filter:'blur(28px)',
+            animation:'orb 5s ease-in-out infinite',
+          }} />
+        </div>
+        <div style={{
+          position:'absolute', inset:0,
+          display:'flex', alignItems:'center', justifyContent:'center',
+        }}>
+          <span style={{
+            fontFamily:"'Cormorant Garamond',serif", fontWeight:300,
+            fontSize:'13px', letterSpacing:'0.35em', textTransform:'uppercase',
+            color:'rgba(210,220,245,.72)',
+            animation:'word 5s ease-in-out infinite',
+          }}>begin</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Session ────────────────────────────────────────────────────
+  return (
+    <div style={{ width:'100vw', height:'100vh', background:'#000', position:'relative' }}>
+      <canvas ref={canvasRef} style={{
+        position:'absolute', inset:0,
+        width:'100%', height:'100%',
+        opacity:0, transition:'opacity 1.5s ease',
+      }} />
+      <div style={{
+        position:'absolute', inset:0,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        pointerEvents:'none',
+      }}>
+        <span ref={textRef} style={{
+          fontFamily:"'Cormorant Garamond', serif",
+          fontWeight:300,
+          fontSize:'19px',
+          letterSpacing:'0.18em',
+          color:'rgba(210,220,242,.62)',
+          opacity:0,
+          transform:'translateY(0px)',
+          userSelect:'none',
+          textAlign:'center',
+          maxWidth:'420px',
+
+        }} />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Anikara />);
+</script>
+<!-- Service worker -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+// iOS install prompt — only shown in Safari, not already installed
+(function() {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isInStandalone = window.navigator.standalone === true;
+  const dismissed = localStorage.getItem('anikara_install_dismissed');
+  if (!isIOS || isInStandalone || dismissed) return;
+
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.id = 'install-prompt';
+      el.style.cssText = `
+        position:fixed; bottom:32px; left:50%; transform:translateX(-50%);
+        background:rgba(12,12,20,0.92); border:1px solid rgba(80,100,200,0.18);
+        border-radius:14px; padding:16px 22px; max-width:300px; width:calc(100% - 48px);
+        font-family:'Cormorant Garamond',serif; font-weight:300;
+        font-size:13px; letter-spacing:0.06em; line-height:1.7;
+        color:rgba(200,215,245,0.72); text-align:center;
+        opacity:0; transition:opacity 1.2s ease; z-index:9999;
+        backdrop-filter:blur(12px);
+      `;
+      el.innerHTML = `
+        <div style="margin-bottom:8px;opacity:0.45;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;">add to home screen</div>
+        tap <span style="opacity:0.9">Share</span> then <span style="opacity:0.9">Add to Home Screen</span> to install
+        <div id="install-dismiss" style="margin-top:14px;font-size:11px;letter-spacing:0.18em;opacity:0.35;cursor:pointer;text-transform:uppercase;">dismiss</div>
+      `;
+      document.body.appendChild(el);
+      requestAnimationFrame(() => { el.style.opacity = '1'; });
+
+      document.getElementById('install-dismiss').addEventListener('click', () => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 1200);
+        localStorage.setItem('anikara_install_dismissed', '1');
+      });
+    }, 4000);
+  });
+})();
+</script>
+</body>
+</html>
