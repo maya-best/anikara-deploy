@@ -7,4 +7,6 @@ module.exports = {
   author: "anikara",
   ogImage: "https://anikara.systems/og-default.png",
   lang: "en",
+  // Google Analytics 4 measurement ID. Leave empty to disable the tag.
+  ga4: "G-NWSZ3XZYK9",
 };

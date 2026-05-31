@@ -2,3 +2,7 @@ node_modules
 _site
 .env
 .DS_Store
+
+# Local Netlify folder
+.netlify
+.claude
