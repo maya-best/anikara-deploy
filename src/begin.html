@@ -191,7 +191,7 @@
 
     .featured {
       border-color: rgba(255, 255, 255, 0.32);
-      background: linear-gradient(180deg, rgba(20, 30, 60, 0.55), rgba(10, 14, 30, 0.7));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
     }
 
     .featured strong { font-size: 17px; }
@@ -255,6 +255,10 @@
       max-height: 200px;
       opacity: 1;
       margin-top: 8px;
+    }
+
+    #form-practice[data-open="true"] {
+      max-height: 260px;
     }
 
     .form-drawer[hidden] {
@@ -393,6 +397,53 @@
       margin: 0;
     }
 
+    /* ── The Practice — nested doorways ──────────────────────────────── */
+    .practice-pad {
+      padding: 6px 8px 8px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .practice-door {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      color: inherit;
+      text-decoration: none;
+      transition: border-color 220ms ease, background 220ms ease, transform 160ms ease;
+    }
+
+    .practice-door:hover {
+      border-color: rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .practice-door:active { transform: scale(0.99); }
+
+    .practice-door .pd-title {
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      margin-bottom: 2px;
+    }
+
+    .practice-door .pd-desc {
+      color: var(--bone-soft);
+      font-size: 11.5px;
+      line-height: 1.4;
+    }
+
+    .practice-door .arrow {
+      flex-shrink: 0;
+      opacity: 0.5;
+    }
+
     footer {
       padding: 28px 0 0;
       color: rgba(255, 255, 255, 0.28);
@@ -437,13 +488,33 @@
 
     <section class="stack" aria-label="Anikara pathways">
 
-      <a class="card featured" href="https://anikara.systems/pre-sleep">
-        <span>
-          <strong>Pre-Sleep Embodiment</strong>
-          <span class="desc">A guided descent for the threshold between waking and sleep.</span>
-        </span>
-        <span class="arrow" aria-hidden="true">&rarr;</span>
-      </a>
+      <div class="card-group">
+        <button class="card card--toggle featured" data-form="practice" type="button" aria-expanded="false" aria-controls="form-practice">
+          <span>
+            <strong>The Practice</strong>
+            <span class="desc">Somatic grounding for the threshold — morning and night.</span>
+          </span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
+        <div class="form-drawer" id="form-practice" data-form-id="practice" hidden>
+          <div class="practice-pad">
+            <a class="practice-door" href="https://anikara.systems/morning-orientation">
+              <span>
+                <span class="pd-title">Morning Orientation</span>
+                <span class="pd-desc">Arrive in the body before the day begins.</span>
+              </span>
+              <span class="arrow" aria-hidden="true">&rarr;</span>
+            </a>
+            <a class="practice-door" href="https://anikara.systems/pre-sleep">
+              <span>
+                <span class="pd-title">Pre-Sleep Descent</span>
+                <span class="pd-desc">A guided descent for the threshold between waking and sleep.</span>
+              </span>
+              <span class="arrow" aria-hidden="true">&rarr;</span>
+            </a>
+          </div>
+        </div>
+      </div>
 
       <div class="card-group">
         <button class="card card--toggle" data-form="mirror" type="button" aria-expanded="false" aria-controls="form-mirror">

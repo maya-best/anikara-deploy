@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Anikara Morning">
+<meta name="theme-color" content="#030507">
+<title>Anikara — Morning Orientation</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { width: 100%; height: 100%; background: #020407; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useLayoutEffect } = React;
+
+// ─── TIMING ───────────────────────────────────────────────────────
+// Morning should orient without sedating. Shorter cycle than pre-sleep.
+const INH = 4;
+const EXH = 4;
+const GAP = 2;
+const CYC = INH + EXH + GAP; // 10s per cycle
+const ENTRANCE = 6;          // breath-only before first phrase
+
+// ─── SCRIPT: MORNING ORIENTATION ──────────────────────────────────
+// Use case: first phone unlock, still in bed, before external input.
+const SCRIPT = [
+  // Arrival — the organism re-enters the visible world
+  { text: 'breath arrives', phase: 0 },
+  { text: 'eyes open', phase: 0 },
+  { text: 'body returns', phase: 0 },
+  { text: 'the room is here', phase: 0 },
+  { text: 'you are here', phase: 0 },
+  { text: '', phase: 0 },
+
+  // Body Contact — sensation before story
+  { text: 'jaw softens', phase: 1 },
+  { text: 'spine lengthens', phase: 1 },
+  { text: 'belly receives breath', phase: 1 },
+  { text: 'hands remember', phase: 1 },
+  { text: 'feet remember ground', phase: 1 },
+  { text: '', phase: 1 },
+
+  // Orientation — self before world
+  { text: 'begin from here', phase: 2 },
+  { text: 'stay with your pace', phase: 2 },
+  { text: 'nothing needs to rush', phase: 2 },
+  { text: 'the day can meet you', phase: 2 },
+  { text: 'you do not leave yourself', phase: 2 },
+  { text: '', phase: 2 },
+
+  // Authority — quiet authorship
+  { text: 'attention belongs here', phase: 3 },
+  { text: 'you choose your first movement', phase: 3 },
+  { text: 'decide from the body', phase: 3 },
+  { text: 'let the next step come cleanly', phase: 3 },
+  { text: '', phase: 3 },
+
+  // Entry — carry coherence into the seen
+  { text: 'take this with you', phase: 4 },
+  { text: 'move from this', phase: 4 },
+  { text: 'let the day open', phase: 4 },
+  { text: 'remain here as you begin', phase: 4 },
+  { text: '', phase: 4 },
+  { text: '', phase: 4 },
+];
+
+// Morning color arc: night-blue into first-light pearl/gold, still restrained.
+const PHASE_COLOR = [
+  [54, 76, 145],   // arrival — dim blue
+  [70, 96, 165],   // body contact — blue-gray
+  [94, 118, 175],  // orientation — clearer morning blue
+  [145, 139, 185], // authority — soft violet-pearl
+  [190, 172, 125], // entry — muted first light
+];
+
+const PHASE_FREQ = [196, 207, 220, 233, 247]; // gentle lift: G3 → B3
+
+const ORB_BASE = 500;
+const ORB_MIN = 0.20;
+const ORB_MAX = 0.88;
+const TOTAL_CYCLES = SCRIPT.length;
+const SESSION_END = ENTRANCE + TOTAL_CYCLES * CYC + 7;
+
+function easeInOut(t) { t = Math.max(0, Math.min(1, t)); return t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t; }
+function easeOut(t) { return 1 - (1 - Math.max(0, Math.min(1, t)))**3; }
+function easeIn(t) { return Math.max(0, Math.min(1, t))**3; }
+
+function AnikaraMorning() {
+  const [started, setStarted] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const canvasRef = useRef(null);
+  const textRef = useRef(null);
+  const rafRef = useRef(null);
+  const startRef = useRef(null);
+  const offsetRef = useRef(0);
+  const stateRef = useRef({ text: '', textOp: 0, textY: 0 });
+  const audioRef = useRef(null);
+
+  function initAudio() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.resume();
+
+      const master = ctx.createGain();
+      master.gain.value = 0.055;
+      master.connect(ctx.destination);
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(PHASE_FREQ[0], ctx.currentTime);
+      gain.gain.setValueAtTime(1.0, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start();
+
+      // Light upper harmonic, quieter than pre-sleep.
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(PHASE_FREQ[0] * 2, ctx.currentTime);
+      gain2.gain.setValueAtTime(0.12, ctx.currentTime);
+      osc2.connect(gain2);
+      gain2.connect(master);
+      osc2.start();
+
+      audioRef.current = { ctx, osc, osc2, master };
+    } catch(e) {
+      console.warn('Audio init failed:', e);
+    }
+  }
+
+  useEffect(() => {
+    const s = localStorage.getItem('anikara_morning_t');
+    if (s) {
+      const v = parseFloat(s);
+      if (v < SESSION_END - 5) offsetRef.current = v;
+      else localStorage.removeItem('anikara_morning_t');
+    }
+  }, []);
+
+  function loop(now) {
+    const elapsed = (now - startRef.current) / 1000 + offsetRef.current;
+    localStorage.setItem('anikara_morning_t', elapsed);
+
+    if (elapsed >= SESSION_END) {
+      if (canvasRef.current) canvasRef.current.style.opacity = '0';
+      if (textRef.current) textRef.current.style.opacity = '0';
+      const a = audioRef.current;
+      if (a) a.master.gain.setTargetAtTime(0, a.ctx.currentTime, 1.2);
+      setTimeout(() => setFinished(true), 2200);
+      return;
+    }
+
+    const cyclePos = elapsed % CYC;
+    let breathScale;
+    if (cyclePos < INH) {
+      breathScale = ORB_MIN + (ORB_MAX - ORB_MIN) * easeInOut(cyclePos / INH);
+    } else if (cyclePos < INH + EXH) {
+      breathScale = ORB_MAX - (ORB_MAX - ORB_MIN) * easeInOut((cyclePos - INH) / EXH);
+    } else {
+      breathScale = ORB_MIN;
+    }
+
+    let phaseIdx = 0;
+    let globalOpacity = 1;
+    let color = PHASE_COLOR[0];
+    if (elapsed < ENTRANCE) {
+      globalOpacity = easeInOut(elapsed / ENTRANCE);
+    } else {
+      const sessionT = elapsed - ENTRANCE;
+      const cycleIdx = Math.floor(sessionT / CYC);
+      if (cycleIdx < SCRIPT.length) {
+        phaseIdx = SCRIPT[cycleIdx].phase;
+        color = PHASE_COLOR[phaseIdx];
+      } else {
+        phaseIdx = 4;
+        color = PHASE_COLOR[4];
+        const endT = sessionT - SCRIPT.length * CYC;
+        globalOpacity = 1 - easeIn(endT / 5);
+      }
+    }
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      const cx = W / 2, cy = H / 2;
+      const r = (ORB_BASE / 2) * breathScale;
+
+      const g1 = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.7);
+      g1.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]}, 0.11)`);
+      g1.addColorStop(0.42, `rgba(${color[0]},${color[1]},${color[2]}, 0.045)`);
+      g1.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]}, 0)`);
+      ctx.beginPath(); ctx.arc(cx, cy, r * 2.7, 0, Math.PI * 2); ctx.fillStyle = g1; ctx.fill();
+
+      const g2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.45);
+      g2.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]}, 0.24)`);
+      g2.addColorStop(0.55, `rgba(${color[0]},${color[1]},${color[2]}, 0.09)`);
+      g2.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]}, 0)`);
+      ctx.beginPath(); ctx.arc(cx, cy, r * 1.45, 0, Math.PI * 2); ctx.fillStyle = g2; ctx.fill();
+
+      const g3 = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.62);
+      g3.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]}, 0.46)`);
+      g3.addColorStop(0.62, `rgba(${color[0]},${color[1]},${color[2]}, 0.16)`);
+      g3.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]}, 0)`);
+      ctx.beginPath(); ctx.arc(cx, cy, r * 0.62, 0, Math.PI * 2); ctx.fillStyle = g3; ctx.fill();
+
+      canvas.style.opacity = globalOpacity;
+    }
+
+    const a = audioRef.current;
+    if (a && a.ctx.state === 'running') {
+      const t = a.ctx.currentTime;
+      const targetVol = (0.025 + 0.055 * breathScale) * globalOpacity;
+      a.master.gain.setTargetAtTime(targetVol, t, 0.4);
+      const targetFreq = PHASE_FREQ[phaseIdx] || PHASE_FREQ[0];
+      a.osc.frequency.setTargetAtTime(targetFreq, t, 1.4);
+      a.osc2.frequency.setTargetAtTime(targetFreq * 2, t, 1.4);
+    } else if (a && a.ctx.state === 'suspended') {
+      a.ctx.resume();
+    }
+
+    let text = '', textOp = 0, textY = 0;
+    if (elapsed >= ENTRANCE) {
+      const sessionT = elapsed - ENTRANCE;
+      const cycleIdx = Math.floor(sessionT / CYC);
+      const withinCyc = sessionT - cycleIdx * CYC;
+      if (cycleIdx < SCRIPT.length) {
+        const entry = SCRIPT[cycleIdx];
+        if (entry.text) {
+          text = entry.text;
+          if (withinCyc < INH) {
+            textOp = 0;
+          } else if (withinCyc < INH + 1.5) {
+            textOp = easeOut((withinCyc - INH) / 1.5);
+            textY = 5 * (1 - easeOut((withinCyc - INH) / 1.5));
+          } else if (withinCyc < INH + EXH) {
+            textOp = 1; textY = 0;
+          } else {
+            const t = (withinCyc - INH - EXH) / GAP;
+            textOp = 1 - easeIn(t);
+            textY = -10 * easeIn(t);
+          }
+        }
+      }
+    }
+
+    const el = textRef.current;
+    if (el) {
+      const prev = stateRef.current;
+      if (prev.text !== text) { el.textContent = text; prev.text = text; }
+      if (Math.abs(prev.textOp - textOp) > 0.002) {
+        el.style.opacity = textOp;
+        el.style.transform = `translateY(${textY}px)`;
+        prev.textOp = textOp;
+        prev.textY = textY;
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(loop);
+  }
+
+  const begin = () => {
+    startRef.current = performance.now();
+    initAudio();
+    setStarted(true);
+    rafRef.current = requestAnimationFrame(loop);
+  };
+
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  useLayoutEffect(() => {
+    if (!canvasRef.current) return;
+    const resize = () => {
+      const c = canvasRef.current;
+      if (!c) return;
+      c.width = window.innerWidth;
+      c.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [started]);
+
+  if (finished) {
+    localStorage.removeItem('anikara_morning_t');
+    return <div style={{ width:'100vw', height:'100vh', background:'#020407' }} />;
+  }
+
+  if (!started) {
+    return (
+      <div style={{ width:'100vw', height:'100vh', background:'#020407', cursor:'pointer', position:'relative' }} onClick={begin}>
+        <style>{`
+          @keyframes orb { 0%,100%{opacity:.34;transform:scale(.9)} 50%{opacity:.64;transform:scale(1.08)} }
+          @keyframes word { 0%,100%{opacity:.54} 50%{opacity:.78} }
+        `}</style>
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{
+            width:'315px', height:'315px', borderRadius:'50%',
+            background:'radial-gradient(ellipse, rgba(92,116,178,.38) 0%, rgba(92,116,178,.10) 46%, transparent 72%)',
+            filter:'blur(26px)', animation:'orb 4.5s ease-in-out infinite',
+          }} />
+        </div>
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <span style={{
+            fontFamily:"'Cormorant Garamond',serif", fontWeight:300,
+            fontSize:'13px', letterSpacing:'0.35em', textTransform:'uppercase',
+            color:'rgba(222,230,245,.70)', animation:'word 4.5s ease-in-out infinite',
+          }}>arrive</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ width:'100vw', height:'100vh', background:'#020407', position:'relative' }}>
+      <canvas ref={canvasRef} style={{
+        position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, transition:'opacity 1.2s ease',
+      }} />
+      <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+        <span ref={textRef} style={{
+          fontFamily:"'Cormorant Garamond', serif", fontWeight:300,
+          fontSize:'19px', letterSpacing:'0.17em',
+          color:'rgba(225,232,245,.66)', opacity:0, transform:'translateY(0px)',
+          userSelect:'none', textAlign:'center', maxWidth:'430px', padding:'0 28px',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<AnikaraMorning />);
+</script>
+</body>
+</html>

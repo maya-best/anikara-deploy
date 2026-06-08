@@ -3,6 +3,7 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy({ "src/begin.html": "begin.html" });
   eleventyConfig.addPassthroughCopy({ "src/_redirects": "_redirects" });
   eleventyConfig.addPassthroughCopy({ "src/pre-sleep": "pre-sleep" });
+  eleventyConfig.addPassthroughCopy({ "src/morning-orientation": "morning-orientation" });
   // Any static assets dropped at the src root (images, icons, favicons, og images)
   eleventyConfig.addPassthroughCopy("src/*.png");
   eleventyConfig.addPassthroughCopy("src/*.jpg");
