@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#000000">
-  <title>Anikara — Night · V5 revision</title>
+  <title>Anikara — Night · Gentle descent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -1307,15 +1307,15 @@
 <div class="ghost-row"><button class="ghost-link" data-quiet-new>straight into quiet</button><button class="ghost-link" id="evidenceNew">optional evening note</button></div>
 </div></section>
 <section class="screen" data-screen="contactNew"><div class="center">
-<div class="eyebrow">Contact</div><h2 id="contactTitleNew">Find where your hand can rest comfortably.</h2>
-<p class="subcopy" id="contactCopyNew">Against the bed, beneath your cheek, or somewhere you choose.</p>
-<div class="orb-shell"><button class="orb" id="touchNew" aria-label="Optional touch; release whenever you like" style="border:0"><span class="orb-label">touch, if you like</span></button></div>
-<p class="hint">No need to hold. Release whenever you like.</p>
+<div class="eyebrow">Contact</div><h2 id="contactTitleNew">Notice where the bed is supporting you.</h2>
+<p class="subcopy" id="contactCopyNew">One place is enough: your head on the pillow, your back, or your legs.</p>
+<div class="orb-shell" aria-hidden="true"><div class="orb" style="pointer-events:none;opacity:.5"></div></div>
+<p class="hint">Nothing to hold or repeat.</p>
 <button class="action" id="sceneNextNew">enter my scene</button><button class="ghost-link" data-quiet-new>enter quiet</button>
 </div></section>
 <section class="screen" data-screen="inhabitNew"><div class="center">
 <div class="eyebrow">Your moment</div><div class="scene-field"><p class="scene-text present" id="exactSceneNew"></p></div>
-<p class="subcopy" id="sceneCueNew">Picture one point of contact inside this moment.<br>What are you touching—or what is touching you?</p>
+<p class="subcopy" id="sceneCueNew" style="transition:opacity 3s ease">Let your scene take shape around that feeling of support.</p>
 <p class="hint">You can put the phone down.</p><button class="ghost-link" data-quiet-new>enter quiet now</button>
 </div></section>
 <section class="screen" data-screen="quietNew" style="background:#000"><button id="leaveQuietNew" aria-label="Return home" style="position:absolute;bottom:28px;background:none;border:0;color:#777;font-size:11px;padding:16px">return home</button></section>
@@ -1922,35 +1922,39 @@
     clearNightNew();
     activeSceneNew = newSceneInput.value.trim();
     if (activeSceneNew) safeStore.set('anikara_night_scene_v1', activeSceneNew);
-    document.getElementById('contactTitleNew').textContent = 'Find where your hand can rest comfortably.';
-    document.getElementById('contactCopyNew').textContent = 'Against the bed, beneath your cheek, or somewhere you choose.';
+    document.getElementById('contactTitleNew').textContent = 'Notice where the bed is supporting you.';
+    document.getElementById('contactCopyNew').textContent = 'One place is enough: your head on the pillow, your back, or your legs.';
     document.getElementById('sceneNextNew').textContent = activeSceneNew ? 'enter my scene' : 'continue into quiet';
-    go('contactNew', 'contact');
+    go('contactNew', 'arrive');
     nightLaterNew(() => {
-      if (currentScreen !== 'contactNew') return;
-      document.getElementById('contactTitleNew').textContent = 'Try a little pressure, then release.';
-      document.getElementById('contactCopyNew').textContent = 'Notice which contact you prefer.';
-    }, 9000);
-    nightLaterNew(enterNightSceneNew, 24000);
+      document.getElementById('contactTitleNew').textContent = 'Make one small adjustment, if you want.';
+      document.getElementById('contactCopyNew').textContent = 'Find the position you prefer. Stay with the contact beneath you.';
+    }, 14000);
+    nightLaterNew(enterNightSceneNew, 30000);
   });
   function enterNightSceneNew() {
     clearNightNew();
     if (!activeSceneNew) return quietNew();
     document.getElementById('exactSceneNew').textContent = activeSceneNew;
-    document.getElementById('sceneCueNew').textContent = 'Picture one point of contact inside this moment. What are you touching—or what is touching you?';
+    const cue = document.getElementById('sceneCueNew');
+    cue.style.opacity = '1';
+    cue.textContent = 'Let your scene take shape around that feeling of support.';
     go('inhabitNew', 'your moment');
-    nightLaterNew(() => {
-      if (currentScreen !== 'inhabitNew') return;
-      document.getElementById('sceneCueNew').textContent = 'You can stay with this moment as the screen goes quiet.';
-    }, 35000);
-    nightLaterNew(quietNew, 45000);
+    function cueAfter(text, delay) {
+      nightLaterNew(() => {
+        cue.style.opacity = '0';
+        nightLaterNew(() => { cue.textContent = text; cue.style.opacity = '1'; }, 3000);
+      }, delay);
+    }
+    cueAfter('In this scene, notice what supports you: the ground, a seat, or somewhere you can rest.', 25000);
+    cueAfter('Stay with one sensation that makes this moment feel tangible.', 60000);
+    cueAfter('The scene can continue as the words fade.', 95000);
+    nightLaterNew(() => { cue.style.opacity = '0'; }, 110000);
+    nightLaterNew(quietNew, 125000);
   }
   document.getElementById('sceneNextNew').addEventListener('click', enterNightSceneNew);
   document.getElementById('homeControl').addEventListener('click', clearNightNew);
   document.getElementById('leaveQuietNew').addEventListener('click', goHome);
-  const touchNew = document.getElementById('touchNew');
-  touchNew.addEventListener('pointerdown', () => touchNew.classList.add('pressing'));
-  ['pointerup','pointercancel','blur'].forEach(event => window.addEventListener(event, () => touchNew.classList.remove('pressing')));
   go('nightNew', 'night · experiment');
 })();
 </script>
