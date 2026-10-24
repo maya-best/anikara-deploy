@@ -30,10 +30,12 @@ details textarea{margin-top:12px;min-height:100px;font-size:16px}
 .stage-controls button{color:#bdc3d6;font-size:14px}
 .passage{font-size:clamp(25px,6.1vw,35px);font-weight:350;line-height:1.65;letter-spacing:-.015em;max-width:530px;text-align:center;white-space:pre-line;overflow-wrap:anywhere;margin:0;opacity:1;transition:opacity 2.5s}
 .passage.fading{opacity:0}
-.progress{position:absolute;bottom:max(35px,env(safe-area-inset-bottom));color:#bcc1d0;font-size:13px;letter-spacing:.12em}
+.stage::before{content:"";position:absolute;inset:0;background:#000;opacity:var(--night-dim,0);transition:opacity 12s;pointer-events:none}
+.passage,.stage-controls{z-index:1}.stage-controls{transition:opacity 5s}.stage.resting .stage-controls{opacity:0}.stage.resting .stage-controls:hover,.stage.resting .stage-controls:focus-within{opacity:1}
+.quiet button{opacity:0}.quiet.revealed button,.quiet button:focus-visible{opacity:1}
 .quiet{position:fixed;inset:0;background:#000;display:grid;place-items:end center;padding:24px}.quiet button{color:#a0a4b0}
 @media(max-height:650px){.passage{font-size:23px;line-height:1.5;max-width:490px}.shell{padding-top:20px}header{margin-bottom:30px}}
-@media(prefers-reduced-motion:reduce){.passage,.stage{transition:none}}
+@media(prefers-reduced-motion:reduce){.passage,.stage,.stage::before,.stage-controls{transition:none}}
 </style>
 </head>
 <body>
@@ -48,12 +50,13 @@ details textarea{margin-top:12px;min-height:100px;font-size:16px}
 <div class="actions"><button class="primary" id="begin">Prepare my immersion</button><button class="link" id="quietEntry">Straight into quiet</button></div>
 <p class="status" id="status" role="status" aria-live="polite"></p>
 <details><summary>Optional evening note</summary><label for="note">One moment from today you want to keep.</label><textarea id="note" maxlength="2000" placeholder="One moment is enough…"></textarea></details>
+<p class="intro" style="font-size:16px;margin-top:24px">About four minutes. The words change on their own, with quiet pauses between them. There’s nothing to tap. You can close your eyes whenever you like.</p>
 <p class="privacy" id="privacy">Preparing guidance sends your scene to OpenAI. Your scene and prepared guidance are saved in this browser for reuse. Evening notes stay on this browser. Playback is silent text.</p>
 </main>
 <section class="stage" id="stage" hidden aria-label="Guided immersion">
 <div class="stage-controls"><button class="link" id="back">Back to my scene</button><button class="link" id="quietStage">Enter quiet</button></div>
 <p class="passage" id="passage" aria-live="polite"></p>
-<div class="progress" id="progress" aria-hidden="true"></div>
+
 </section>
 <section class="quiet" id="quiet" hidden aria-label="Quiet"><button class="link" id="return">Return to my scene</button></section>
 <script>
@@ -78,20 +81,34 @@ $("scene").addEventListener("input",()=>{if(request)stop();write("anikara_night_
 $("note").addEventListener("input",()=>{write("anikara_evidence",$("note").value);update();});
 function stop(){run++;timers.forEach(clearTimeout);timers=[];if(request){request.abort();request=null;}$("begin").disabled=false;update();}
 function later(fn,ms){timers.push(setTimeout(fn,ms));}
-function quiet(){stop();$("entry").hidden=true;$("stage").hidden=true;$("quiet").hidden=false;}
+function quiet(){stop();$("quiet").classList.remove("revealed");$("entry").hidden=true;$("stage").hidden=true;$("quiet").hidden=false;}
 function home(){stop();$("quiet").hidden=true;$("stage").hidden=true;$("entry").hidden=false;$("status").textContent="";$("scene").focus();}
+$("quiet").addEventListener("pointerdown",()=>{$("quiet").classList.add("revealed");});
+$("stage").addEventListener("pointerdown",()=>{$("stage").classList.remove("resting");});
 $("quietEntry").onclick=quiet;$("quietStage").onclick=quiet;$("back").onclick=home;$("return").onclick=home;
 function play(passages){
  stop();$("entry").hidden=true;$("quiet").hidden=true;$("stage").hidden=false;
- const p=$("passage");p.classList.remove("fading");p.textContent=passages[0];$("progress").textContent="1 / 5";
- let offset=0;
- const holds=[24000,28000,32000,36000,40000];
- for(let i=1;i<5;i++){
-  offset+=holds[i-1];
-  later(()=>{p.classList.add("fading");later(()=>{p.textContent=passages[i];$("progress").textContent=(i+1)+" / 5";p.classList.remove("fading");},2600);},offset);
- }
- later(()=>{p.classList.add("fading");$("progress").textContent="";},offset+holds[4]);
- later(quiet,offset+holds[4]+3000);
+ $("stage").classList.remove("resting");$("stage").style.setProperty("--night-dim","0");
+ const p=$("passage");p.classList.remove("fading");
+ p.textContent="The words will change on their own.\n\nThere’s nothing to tap. Let your eyes close during the quiet pauses.";
+ let offset=12000;
+ const gaps=[8000,12000,18000,24000,35000];
+ passages.forEach((passage,i)=>{
+   const hold=Math.max(14000,Math.min(24000,passage.split(/\s+/).length*450));
+   later(()=>{
+     p.textContent=passage;p.classList.remove("fading");
+     $("stage").style.setProperty("--night-dim",String(i*.16));
+   },offset);
+   later(()=>p.classList.add("fading"),offset+hold);
+   offset+=hold+gaps[i];
+ });
+ later(()=>$("stage").classList.add("resting"),20000);
+ later(()=>{
+   p.textContent="You can keep resting here.\n\nLet the scene continue as you drift toward sleep.";
+   p.classList.remove("fading");$("stage").style.setProperty("--night-dim",".9");
+ },offset);
+ later(()=>p.classList.add("fading"),offset+12000);
+ later(quiet,offset+20000);
 }
 $("begin").onclick=async()=>{
  const scene=$("scene").value.trim();
