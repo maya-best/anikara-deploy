@@ -44,7 +44,17 @@ export default async function handler(request) {
         }}}
       })
     });
-    if (!upstream.ok) return reply({error:upstream.status===429 ? "Scene generation is busy. Please try again shortly." : "Scene generation is unavailable. Your scene is saved; please try again later."},upstream.status===429?429:502);
+    if (!upstream.ok) {
+      const failure = await upstream.json().catch(() => ({}));
+      const code = failure?.error?.code;
+      if (code === "insufficient_quota" || code === "billing_hard_limit_reached") {
+        return reply({error:"OpenAI API credit or billing limit needs attention. Your scene is saved.",code:"API_QUOTA"},402);
+      }
+      if (upstream.status === 401 || upstream.status === 403) {
+        return reply({error:"The OpenAI API key or its Responses permission needs attention.",code:"API_ACCESS"},502);
+      }
+      return reply({error:upstream.status===429 ? "OpenAI is temporarily rate-limiting generation. Please try again shortly." : "Scene generation is unavailable. Your scene is saved; please try again later.",code:upstream.status===429?"API_RATE_LIMIT":"API_UNAVAILABLE"},upstream.status===429?429:502);
+    }
     const result = await upstream.json();
     if (result.status !== "completed") return reply({error:"The guidance was incomplete. Please try again."},502);
     const content = (result.output || []).filter(item=>item.type==="message").flatMap(item=>item.content || []);
